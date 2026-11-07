@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { UserPlus, Sparkles, Building2, CheckCircle2 } from 'lucide-react';
+import { UserPlus, CheckCircle2 } from 'lucide-react';
 
 export default function CadastroPage() {
   const router = useRouter();
@@ -34,6 +34,7 @@ export default function CadastroPage() {
         email,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: nome.trim(),
             name: nome.trim(),
@@ -43,13 +44,18 @@ export default function CadastroPage() {
 
       if (error) throw error;
 
-      if (data.session) {
-        // Redireciona imediatamente se a confirmação de e-mail estiver desabilitada
+      // Login imediato para evitar redirecionamento por e-mail
+      const { error: loginErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!loginErr) {
         router.push('/dashboard');
         router.refresh();
       } else {
         setSuccessMsg(
-          'Conta criada com sucesso! Verifique seu e-mail para confirmar o cadastro ou realize o login.'
+          'Conta criada com sucesso! Você já pode realizar o login com suas credenciais.'
         );
       }
     } catch (err: any) {
@@ -70,17 +76,6 @@ export default function CadastroPage() {
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           Ambiente multi-perfil e multi-empresa
-        </p>
-      </div>
-
-      {/* Box explicativo do Onboarding Automático */}
-      <div className="mb-5 p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200">
-        <div className="flex items-center gap-2 font-bold mb-1">
-          <Sparkles className="w-4 h-4 text-blue-600" />
-          <span>Setup Automático de Boas-Vindas</span>
-        </div>
-        <p className="text-[11px] leading-relaxed text-blue-700 dark:text-blue-300">
-          Ao registrar, o sistema gera automaticamente seu perfil titular e suas empresas padrão (<strong>Pessoal</strong>, <strong>Athena</strong> e <strong>Click Aky</strong>) com contas bancárias e categorias da DRE.
         </p>
       </div>
 

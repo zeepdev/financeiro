@@ -162,7 +162,7 @@ export default function DashboardPage() {
             <div>
               <h3 className="font-bold text-base">Bem-vindo ao Financeiro!</h3>
               <p className="text-xs text-blue-100 mt-0.5">
-                Gostaria de carregar lançamentos de demonstração (Athena, Click Aky, Pessoal com Splits e DRE) para testar os relatórios?
+                Gostaria de carregar lançamentos de demonstração com receitas, despesas e rateios (splits) para testar os relatórios?
               </p>
             </div>
           </div>
