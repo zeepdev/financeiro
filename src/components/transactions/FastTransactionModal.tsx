@@ -21,8 +21,21 @@ import {
   CheckCircle2,
   PieChart,
   Percent,
+  Camera,
+  Sparkles,
+  Loader2,
+  Paperclip,
 } from 'lucide-react';
 import { TransactionType } from '@/types/database.types';
+import {
+  parseImageOcr,
+  parsePdf,
+  parseExcelOrCsv,
+} from '@/lib/extractors/documentParser';
+import {
+  uploadComprovanteFile,
+  linkComprovanteToTransaction,
+} from '@/lib/services/comprovantesService';
 
 export default function FastTransactionModal() {
   const {
@@ -68,6 +81,52 @@ export default function FastTransactionModal() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Comprovante / OCR
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState('');
+  const receiptInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleScanReceipt = async (file: File) => {
+    setReceiptFile(file);
+    setIsScanning(true);
+    setScanStatus('Lendo comprovante com IA...');
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      let result;
+      if (['xlsx', 'xls', 'csv'].includes(ext)) {
+        result = await parseExcelOrCsv(file);
+      } else if (ext === 'pdf') {
+        result = await parsePdf(file);
+      } else {
+        result = await parseImageOcr(file, (_p, st) => setScanStatus(st));
+      }
+
+      if (result.sucesso && result.transacoes.length > 0) {
+        const top = result.transacoes[0];
+        setDescricao(top.descricao);
+        setValorCentavos(top.valorCentavos);
+        setValorDisplay(
+          (top.valorCentavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+        );
+        if (top.tipo) setTipo(top.tipo);
+        if (top.data) {
+          setDataCompetencia(top.data);
+          setDataVencimento(top.data);
+        }
+        setIsPago(true);
+        setScanStatus(`✓ Detectado: ${top.descricao}`);
+      } else {
+        setScanStatus('Arquivo anexado com sucesso.');
+      }
+    } catch (err: any) {
+      console.warn('Erro ao ler comprovante:', err);
+      setScanStatus('Comprovante anexado.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   // Sincroniza com abertura do modal
   useEffect(() => {
     if (isFastModalOpen) {
@@ -78,6 +137,9 @@ export default function FastTransactionModal() {
       setIsPago(false);
       setHasSplits(false);
       setErrorMsg('');
+      setReceiptFile(null);
+      setScanStatus('');
+      setIsScanning(false);
 
       // Auto-seleciona empresa ativa ou primeira disponível
       if (activeCompanyId) {
@@ -199,6 +261,18 @@ export default function FastTransactionModal() {
         if (splitErr) throw splitErr;
       }
 
+      // 3. Se houver comprovante/print anexado, fazer upload e vincular
+      if (receiptFile && tx && activeProfile) {
+        try {
+          const uploadRes = await uploadComprovanteFile(receiptFile, activeProfile.id);
+          if (uploadRes.success && uploadRes.attachment) {
+            await linkComprovanteToTransaction(uploadRes.attachment.id, tx.id);
+          }
+        } catch (attErr) {
+          console.warn('Erro ao anexar comprovante:', attErr);
+        }
+      }
+
       await refetchData();
       setIsFastModalOpen(false);
     } catch (err: any) {
@@ -274,6 +348,45 @@ export default function FastTransactionModal() {
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
               <span>Transferir</span>
+            </button>
+          </div>
+
+          {/* Leitor Rápido de Print / Comprovante */}
+          <div>
+            <input
+              type="file"
+              ref={receiptInputRef}
+              className="hidden"
+              accept="image/*,application/pdf,.xlsx,.xls,.csv"
+              onChange={(e) => {
+                if (e.target.files?.[0]) {
+                  handleScanReceipt(e.target.files[0]);
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={isScanning}
+              onClick={() => receiptInputRef.current?.click()}
+              className="w-full py-2 px-3 rounded-xl border border-dashed border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-all flex items-center justify-between text-xs font-semibold text-blue-700 dark:text-blue-300 cursor-pointer disabled:opacity-60"
+            >
+              <div className="flex items-center gap-2 truncate">
+                {isScanning ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
+                ) : (
+                  <Camera className="w-4 h-4 text-blue-600 shrink-0" />
+                )}
+                <span className="truncate">
+                  {isScanning
+                    ? scanStatus || 'Lendo comprovante...'
+                    : receiptFile
+                    ? `✓ Anexado: ${receiptFile.name}`
+                    : '📸 Ler Print do PIX ou PDF (Preenchimento Automático)'}
+                </span>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shrink-0">
+                IA / OCR
+              </span>
             </button>
           </div>
 
